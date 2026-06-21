@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campus SOS — Admin</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#14213D">
+<style>
+  :root{
+    --ink:#14213D; --paper:#FBF9F4; --paper-dim:#F1EDE3; --alert:#D7263D; --alert-dim:#FBE4E7;
+    --slate:#5C6470; --slate-light:#9CA3AF; --ok:#2E7D5B; --ok-dim:#E3F1EA; --line: rgba(20,33,61,0.12);
+    --mono: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    --sans: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  .role-bar{display:flex;align-items:center;gap:8px;padding:14px 20px;background:var(--ink);color:var(--paper);font-size:14px;font-weight:700;}
+  .role-bar .dot{width:8px;height:8px;border-radius:50%;background:var(--alert);
+    box-shadow:0 0 0 0 rgba(215,38,61,.6); animation:dotpulse 2s infinite;}
+  @keyframes dotpulse{0%{box-shadow:0 0 0 0 rgba(215,38,61,.55);}70%{box-shadow:0 0 0 8px rgba(215,38,61,0);}100%{box-shadow:0 0 0 0 rgba(215,38,61,0);}}
+
+  .admin-banner{display:none;background:#FFF6E0;color:#7A5B00;border-bottom:1px solid #F0DFA0;
+    text-align:center;font-size:13px;font-weight:600;padding:9px 20px;}
+  .admin-banner.show{display:block;}
+  .admin-banner.error{background:var(--alert-dim);color:#8a1124;border-color:#f3b8c0;}
+
+  .sos-flash-banner{display:none;background:var(--alert);color:#fff;text-align:center;font-weight:700;
+    font-size:14px;letter-spacing:.02em;padding:12px 20px;}
+  .sos-flash-banner.show{display:block;animation:bannerflash 1s infinite;}
+  @keyframes bannerflash{0%,100%{background:var(--alert);}50%{background:#a30f24;}}
+
+  .admin-topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 28px;
+    border-bottom:1px solid var(--line);flex-wrap:wrap;gap:12px;}
+  .admin-topbar h2{font-size:18px;margin:0;font-weight:700;}
+  .admin-topbar .sub{font-size:12.5px;color:var(--slate);margin-top:3px;}
+  .admin-controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+
+  .arm-btn{display:flex;align-items:center;gap:7px;border:none;border-radius:8px;background:var(--ink);
+    color:var(--paper);font-size:13px;font-weight:700;padding:9px 16px;cursor:pointer;transition:background .2s;}
+  .arm-btn:hover{background:#0c1730;}
+  .arm-btn.armed{background:var(--ok-dim);color:var(--ok);}
+
+  .counter-pill{background:var(--ink);color:var(--paper);font-size:12.5px;font-weight:700;
+    padding:6px 13px;border-radius:20px;display:flex;align-items:center;gap:6px;}
+  .counter-pill.has-active{background:var(--alert);}
+  .counter-pill .n{font-family:var(--mono);}
+
+  .alerts-area{padding:22px 28px 60px;}
+  .empty-state{text-align:center;padding:80px 20px;color:var(--slate);}
+  .empty-state .glyph{font-size:34px;margin-bottom:14px;}
+  .empty-state h3{margin:0 0 6px;color:var(--ink);font-size:16px;}
+  .empty-state p{margin:0;font-size:13.5px;}
+
+  .section-label{font-size:11.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--slate);
+    font-weight:700;margin:0 0 12px;}
+  .alert-grid{display:flex;flex-direction:column;gap:10px;margin-bottom:30px;}
+
+  .alert-card{border:1.5px solid var(--line);border-radius:10px;background:#fff;padding:16px 18px;
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  .alert-card.active{border-color:var(--alert);background:var(--alert-dim);box-shadow:0 2px 14px rgba(215,38,61,0.14);}
+  .alert-card.resolved{opacity:.7;}
+
+  .alert-pulse{width:11px;height:11px;border-radius:50%;background:var(--alert);flex-shrink:0;}
+  .alert-card.active .alert-pulse{animation:dotpulse 1.3s infinite;}
+  .alert-card.resolved .alert-pulse{background:var(--ok);animation:none;}
+
+  .alert-main{flex:1;min-width:200px;}
+  .alert-main .name{font-weight:700;font-size:15px;}
+  .alert-main .meta{font-size:12.5px;color:var(--slate);margin-top:3px;font-family:var(--mono);}
+  .alert-main .meta a{color:var(--slate);text-decoration:underline;}
+
+  .alert-tag{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:5px 10px;border-radius:6px;}
+  .alert-tag.active{background:var(--alert);color:#fff;}
+  .alert-tag.resolved{background:var(--ok-dim);color:var(--ok);}
+
+  .ack-btn,.resolve-btn{border:none;border-radius:7px;font-size:12.5px;font-weight:700;padding:8px 14px;cursor:pointer;}
+  .ack-btn{background:var(--ink);color:var(--paper);}
+  .ack-btn:hover{background:#0c1730;}
+  .resolve-btn{background:transparent;border:1.5px solid var(--ok);color:var(--ok);}
+  .resolve-btn:hover{background:var(--ok-dim);}
+
+  .timer-elapsed{font-family:var(--mono);font-size:12.5px;color:var(--alert);font-weight:700;min-width:54px;text-align:right;}
+  .alert-card.resolved .timer-elapsed{color:var(--slate);}
+
+  @media (max-width:560px){
+    .alert-card{flex-direction:column;align-items:flex-start;}
+    .timer-elapsed{text-align:left;}
+  }
+</style>
+</head>
+<body>
+
+<div class="role-bar"><span class="dot"></span> Campus SOS — Admin</div>
+<div class="admin-banner" id="setup-banner"></div>
+<div class="sos-flash-banner" id="sos-flash-banner">⚠ ACTIVE SOS ALERT — RESPOND NOW</div>
+
+<div class="admin-topbar">
+  <div>
+    <h2>Safety Dashboard</h2>
+    <div class="sub">Riverside High · Front Office</div>
+  </div>
+  <div class="admin-controls">
+    <div class="counter-pill" id="counter-pill"><span class="n" id="counter-n">0</span> active</div>
+    <button class="arm-btn" id="arm-btn">🔔 Enable notifications</button>
+  </div>
+</div>
+
+<div class="alerts-area">
+  <div id="empty-state" class="empty-state">
+    <div class="glyph">🛡️</div>
+    <h3>All clear</h3>
+    <p>No SOS alerts right now. This panel updates instantly when a student presses the button.</p>
+  </div>
+
+  <div id="active-section" style="display:none;">
+    <p class="section-label">Active — needs response</p>
+    <div class="alert-grid" id="active-grid"></div>
+  </div>
+
+  <div id="resolved-section" style="display:none;">
+    <p class="section-label">Resolved</p>
+    <div class="alert-grid" id="resolved-grid"></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-messaging-compat.js"></script>
+<script>
+(function(){
+  const API = '';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyB50atVibwLBtGiz7trwS-Il4SePwKPjtk",
+    authDomain: "sos-service-65f36.firebaseapp.com",
+    projectId: "sos-service-65f36",
+    storageBucket: "sos-service-65f36.firebasestorage.app",
+    messagingSenderId: "654724325662",
+    appId: "1:654724325662:web:d15f770b3179082cc4290f"
+  };
+  // VAPID key goes here once generated in Firebase Console -> Cloud Messaging -> Web Push certificates
+  const VAPID_KEY = "BHeO2m4D8bg9GQr4SpcE9leyh8mvS-dXGcaBSv7ZK5ShA2UL903wVal0WErotAlQU_hp3KZfyCuxOQrjSAuGtwo";
+
+  const setupBanner = document.getElementById('setup-banner');
+  const armBtn = document.getElementById('arm-btn');
+  const flashBanner = document.getElementById('sos-flash-banner');
+  const emptyState = document.getElementById('empty-state');
+  const activeSection = document.getElementById('active-section');
+  const resolvedSection = document.getElementById('resolved-section');
+  const activeGrid = document.getElementById('active-grid');
+  const resolvedGrid = document.getElementById('resolved-grid');
+  const counterPill = document.getElementById('counter-pill');
+  const counterN = document.getElementById('counter-n');
+
+  let alerts = [];
+  let alarmArmed = false;
+  let audioCtx = null, alarmTimer = null;
+
+  function showSetupBanner(msg, isError){
+    setupBanner.textContent = msg;
+    setupBanner.classList.add('show');
+    setupBanner.classList.toggle('error', !!isError);
+  }
+  function hideSetupBanner(){ setupBanner.classList.remove('show'); }
+
+  if(VAPID_KEY.startsWith('PASTE_')){
+    showSetupBanner('Setup incomplete: VAPID key not set in admin.html — push notifications are disabled until this is added.', true);
+  }
+
+  let messaging = null;
+  try{
+    firebase.initializeApp(firebaseConfig);
+    messaging = firebase.messaging();
+  }catch(e){
+    console.error('Firebase init failed', e);
+    showSetupBanner('Firebase failed to initialize — check the config values in admin.html.', true);
+  }
+
+  async function enableNotifications(){
+    if(!('Notification' in window)){
+      showSetupBanner('This browser does not support notifications.', true);
+      return;
+    }
+    if(!window.isSecureContext){
+      showSetupBanner('Push notifications require HTTPS. Open this page via your https:// server URL.', true);
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if(permission !== 'granted'){
+      showSetupBanner('Notification permission was denied. Enable it in your browser/site settings, then reload.', true);
+      return;
+    }
+
+    try{
+      const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: registration });
+      if(!token) throw new Error('No token returned — VAPID key may be missing or incorrect.');
+
+      await fetch(`${API}/api/admin/register`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ token, label: navigator.userAgent.slice(0,60) })
+      });
+
+      alarmArmed = true;
+      armBtn.classList.add('armed');
+      armBtn.textContent = '🔊 Notifications armed';
+      hideSetupBanner();
+      unlockAudio();
+    }catch(err){
+      console.error(err);
+      showSetupBanner('Could not enable push notifications: ' + err.message, true);
+    }
+  }
+
+  armBtn.addEventListener('click', enableNotifications);
+
+  if(messaging){
+    messaging.onMessage((payload)=>{
+      loadAlerts();
+      if(alarmArmed) startAlarmSound();
+    });
+  }
+
+  function getCtx(){
+    if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function unlockAudio(){
+    try{
+      const ctx = getCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 1000; gain.gain.value = 0.001;
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.05);
+      setTimeout(()=>{
+        const o2 = ctx.createOscillator(), g2 = ctx.createGain();
+        o2.type='sine'; o2.frequency.value=740; g2.gain.value=0.07;
+        o2.connect(g2).connect(ctx.destination);
+        o2.start(); o2.stop(ctx.currentTime+0.18);
+      }, 60);
+    }catch(e){}
+  }
+  function startAlarmSound(){
+    if(alarmTimer) return;
+    try{
+      const ctx = getCtx();
+      let high = true;
+      const beep = ()=>{
+        const osc = ctx.createOscillator(), gain = ctx.createGain();
+        osc.type='square'; osc.frequency.value = high?880:660; high=!high;
+        gain.gain.value = 0.16;
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime+0.28);
+      };
+      beep();
+      alarmTimer = setInterval(beep, 420);
+    }catch(e){}
+  }
+  function stopAlarmSound(){ clearInterval(alarmTimer); alarmTimer=null; }
+  function maybeStopAlarm(){
+    if(!alerts.some(a=>a.status==='active')) stopAlarmSound();
+  }
+
+  async function loadAlerts(){
+    try{
+      const res = await fetch(`${API}/api/alerts`);
+      if(!res.ok) throw new Error('status ' + res.status);
+      alerts = await res.json();
+      render();
+    }catch(err){
+      console.error('Failed to load alerts', err);
+    }
+  }
+
+  function fmtElapsed(ms){
+    const s = Math.floor(ms/1000), m = Math.floor(s/60), r = s%60;
+    return (m>0? m+'m ':'') + r+'s';
+  }
+  function fmtTime(ts){
+    if(!ts) return '';
+    return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  }
+  function escapeHtml(s){
+    const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+  }
+  function locLink(a){
+    if(a.lat==null){
+      const note = a.locNote ? escapeHtml(a.locNote) : 'Location unavailable';
+      return `<span style="color:var(--alert);">${note}</span>`;
+    }
+    const url = `https://www.google.com/maps?q=${a.lat},${a.lon}`;
+    const acc = a.accuracy ? ` ±${Math.round(a.accuracy)}m` : '';
+    return `<a href="${url}" target="_blank" rel="noopener">Live map (${a.lat.toFixed(4)}, ${a.lon.toFixed(4)})${acc}</a>`;
+  }
+
+  let tickInterval = null;
+  function render(){
+    const active = alerts.filter(a=>a.status==='active' || a.status==='ack');
+    const resolved = alerts.filter(a=>a.status==='resolved');
+
+    emptyState.style.display = (alerts.length===0) ? 'block' : 'none';
+    activeSection.style.display = active.length ? 'block' : 'none';
+    resolvedSection.style.display = resolved.length ? 'block' : 'none';
+
+    counterN.textContent = active.length;
+    counterPill.classList.toggle('has-active', active.length>0);
+    flashBanner.classList.toggle('show', active.some(a=>a.status==='active'));
+
+    if(active.some(a=>a.status==='active') && alarmArmed) startAlarmSound();
+    else maybeStopAlarm();
+
+    activeGrid.innerHTML = active.map(a=>{
+      const elapsed = fmtElapsed(Date.now()-a.createdAt);
+      const isAck = a.status==='ack';
+      return `
+        <div class="alert-card active" data-id="${a.id}">
+          <div class="alert-pulse"></div>
+          <div class="alert-main">
+            <div class="name">${escapeHtml(a.name)}</div>
+            <div class="meta">${locLink(a)} · sent ${fmtTime(a.createdAt)}</div>
+          </div>
+          <span class="alert-tag active">${isAck? 'Acknowledged' : 'New'}</span>
+          <span class="timer-elapsed">${elapsed}</span>
+          ${isAck
+            ? `<button class="resolve-btn" data-action="resolve" data-id="${a.id}">Mark resolved</button>`
+            : `<button class="ack-btn" data-action="ack" data-id="${a.id}">Acknowledge</button>`}
+        </div>`;
+    }).join('');
+
+    resolvedGrid.innerHTML = resolved.slice(0,10).map(a=>`
+      <div class="alert-card resolved" data-id="${a.id}">
+        <div class="alert-pulse"></div>
+        <div class="alert-main">
+          <div class="name">${escapeHtml(a.name)}</div>
+          <div class="meta">${locLink(a)} · sent ${fmtTime(a.createdAt)}</div>
+        </div>
+        <span class="alert-tag resolved">Resolved</span>
+        <span class="timer-elapsed">${fmtTime(a.resolvedAt)}</span>
+      </div>`).join('');
+
+    clearInterval(tickInterval);
+    if(active.length){
+      tickInterval = setInterval(()=>{
+        document.querySelectorAll('.alert-card.active').forEach(card=>{
+          const a = alerts.find(x=>x.id===card.dataset.id);
+          if(!a) return;
+          const t = card.querySelector('.timer-elapsed');
+          if(t) t.textContent = fmtElapsed(Date.now()-a.createdAt);
+        });
+      }, 1000);
+    }
+  }
+
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if(!btn) return;
+    const id = btn.dataset.id;
+    try{
+      await fetch(`${API}/api/sos/${id}/${btn.dataset.action}`, {method:'POST'});
+      loadAlerts();
+    }catch(err){ console.error(err); }
+  });
+
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden) loadAlerts();
+  });
+
+  loadAlerts();
+  setInterval(loadAlerts, 4000);
+})();
+</script>
+</body>
+</html>

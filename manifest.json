@@ -1,0 +1,14 @@
+{
+  "name": "Campus SOS Admin",
+  "short_name": "SOS Admin",
+  "description": "Live SOS alert dashboard for school admin",
+  "start_url": "/admin.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FBF9F4",
+  "theme_color": "#14213D",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

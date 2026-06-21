@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campus SOS — Student</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#14213D">
+<style>
+  :root{
+    --ink:#14213D; --paper:#FBF9F4; --alert:#D7263D; --alert-dim:#FBE4E7;
+    --slate:#5C6470; --slate-light:#9CA3AF; --ok:#2E7D5B; --line: rgba(20,33,61,0.12);
+    --sans: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);height:100%;}
+  .role-bar{display:flex;align-items:center;gap:8px;padding:14px 20px;background:var(--ink);color:var(--paper);font-size:14px;font-weight:700;}
+  .role-bar .dot{width:8px;height:8px;border-radius:50%;background:var(--alert);
+    box-shadow:0 0 0 0 rgba(215,38,61,.6); animation:dotpulse 2s infinite;}
+  @keyframes dotpulse{0%{box-shadow:0 0 0 0 rgba(215,38,61,.55);}70%{box-shadow:0 0 0 8px rgba(215,38,61,0);}100%{box-shadow:0 0 0 0 rgba(215,38,61,0);}}
+
+  #wrap{min-height:calc(100vh - 49px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px 60px;}
+  .header{text-align:center;margin-bottom:36px;}
+  .header .eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--slate);font-weight:600;margin-bottom:6px;}
+  .header h1{font-size:22px;margin:0;font-weight:700;}
+  .header p{margin:8px 0 0;color:var(--slate);font-size:14px;max-width:320px;}
+
+  .sos-wrap{position:relative;width:240px;height:240px;display:flex;align-items:center;justify-content:center;}
+  .sos-ring-svg{position:absolute;top:0;left:0;width:240px;height:240px;transform:rotate(-90deg);pointer-events:none;}
+  .sos-ring-bg{fill:none;stroke:var(--line);stroke-width:6;}
+  .sos-ring-progress{fill:none;stroke:var(--alert);stroke-width:6;stroke-linecap:round;
+    stroke-dasharray:691.15;stroke-dashoffset:691.15;transition:stroke-dashoffset .05s linear;}
+  #sos-btn{width:200px;height:200px;border-radius:50%;border:none;background:var(--ink);color:var(--paper);
+    font-size:28px;font-weight:800;letter-spacing:.04em;cursor:pointer;user-select:none;-webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent;transition:transform .12s, background .2s;
+    box-shadow:0 8px 24px rgba(20,33,61,0.22);touch-action:none;}
+  #sos-btn:active{transform:scale(0.97);}
+  #sos-btn.holding{background:var(--alert);}
+  #sos-btn.sent{background:var(--alert);}
+  #sos-btn:disabled{opacity:0.6;cursor:not-allowed;}
+
+  .hold-hint{margin-top:22px;font-size:13px;color:var(--slate);text-align:center;height:18px;}
+  .name-row{margin-top:30px;display:flex;gap:10px;align-items:center;}
+  .name-row input{border:1.5px solid var(--line);background:#fff;border-radius:8px;padding:9px 12px;font-size:14px;width:200px;color:var(--ink);}
+  .name-row input:focus{outline:2px solid var(--ink);outline-offset:1px;}
+  .name-row label{font-size:13px;color:var(--slate);font-weight:600;}
+
+  .status{margin-top:28px;text-align:center;font-size:14px;min-height:20px;max-width:320px;}
+  .status-pending{color:var(--alert);font-weight:700;}
+  .status-ack{color:var(--ok);font-weight:700;}
+  .status-error{color:var(--alert);font-weight:600;}
+  .loc-sub{font-size:12.5px;color:var(--slate);margin-top:4px;display:block;}
+
+  .loc-note{margin-top:18px;font-size:12px;color:var(--slate-light);text-align:center;max-width:280px;}
+  .cancel-btn{margin-top:18px;background:none;border:1.5px solid var(--line);color:var(--slate);
+    padding:8px 18px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;display:none;}
+  .cancel-btn.show{display:inline-block;}
+</style>
+</head>
+<body>
+
+<div class="role-bar"><span class="dot"></span> Campus SOS</div>
+
+<div id="wrap">
+  <div class="header">
+    <div class="eyebrow">Riverside High · Safety</div>
+    <h1>Press and hold for help</h1>
+    <p>Holding the button for 2 seconds sends your name and live location straight to the school office's phone.</p>
+  </div>
+
+  <div class="sos-wrap">
+    <svg class="sos-ring-svg" viewBox="0 0 240 240">
+      <circle class="sos-ring-bg" cx="120" cy="120" r="110"></circle>
+      <circle class="sos-ring-progress" id="ring-progress" cx="120" cy="120" r="110"></circle>
+    </svg>
+    <button id="sos-btn" aria-label="Press and hold to send SOS alert">SOS</button>
+  </div>
+
+  <div class="hold-hint" id="hold-hint">Hold for 2 seconds</div>
+
+  <div class="name-row">
+    <label for="student-name">Your name</label>
+    <input type="text" id="student-name" placeholder="e.g. Aanya Sharma" autocomplete="off">
+  </div>
+
+  <div class="status" id="status"></div>
+  <button class="cancel-btn" id="cancel-btn">Cancel my alert</button>
+
+  <div class="loc-note">Your live location is shared only with school admin when you send an alert.</div>
+</div>
+
+<script>
+(function(){
+  const API = ''; // same-origin; backend serves this file too
+  const sosBtn = document.getElementById('sos-btn');
+  const ring = document.getElementById('ring-progress');
+  const holdHint = document.getElementById('hold-hint');
+  const statusEl = document.getElementById('status');
+  const cancelBtn = document.getElementById('cancel-btn');
+  const nameInput = document.getElementById('student-name');
+
+  const HOLD_MS = 2000;
+  const RING_LEN = 691.15;
+  let holdTimer = null, holdStart = null, holdRAF = null;
+  let myAlertId = null;
+  let sent = false;
+  let watchId = null;
+
+  function startHold(){
+    if(sent) return;
+    holdStart = Date.now();
+    sosBtn.classList.add('holding');
+    holdHint.textContent = 'Keep holding…';
+    tickRing();
+    holdTimer = setTimeout(fireAlert, HOLD_MS);
+  }
+  function tickRing(){
+    const elapsed = Date.now() - holdStart;
+    const pct = Math.min(elapsed / HOLD_MS, 1);
+    ring.style.strokeDashoffset = RING_LEN * (1 - pct);
+    if(pct < 1 && holdTimer) holdRAF = requestAnimationFrame(tickRing);
+  }
+  function cancelHold(){
+    if(sent) return;
+    clearTimeout(holdTimer); holdTimer = null;
+    cancelAnimationFrame(holdRAF);
+    sosBtn.classList.remove('holding');
+    ring.style.strokeDashoffset = RING_LEN;
+    holdHint.textContent = 'Hold for 2 seconds';
+  }
+
+  function geoErrorReason(err){
+    if(!window.isSecureContext) return 'Location blocked: this page needs to be opened over HTTPS for GPS to work.';
+    if(err && err.code === 1) return 'Location permission was denied. Allow location access in your browser settings and try again.';
+    if(err && err.code === 2) return 'Location could not be determined (signal issue).';
+    if(err && err.code === 3) return 'Location request timed out.';
+    return 'Location unavailable.';
+  }
+
+  async function fireAlert(){
+    sent = true;
+    sosBtn.classList.remove('holding');
+    sosBtn.classList.add('sent');
+    sosBtn.disabled = true;
+    holdHint.textContent = '';
+    ring.style.strokeDashoffset = 0;
+
+    const name = nameInput.value.trim() || 'Unnamed student';
+
+    statusEl.innerHTML = '<span class="status-pending">Getting your location…</span>';
+
+    const doSend = async (lat, lon, accuracy, locNote) => {
+      try{
+        const res = await fetch(`${API}/api/sos`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ name, lat, lon, accuracy, locNote })
+        });
+        if(!res.ok) throw new Error('Server responded ' + res.status);
+        const data = await res.json();
+        myAlertId = data.id;
+        const noteHtml = locNote ? `<span class="loc-sub">${locNote}</span>` : (accuracy ? `<span class="loc-sub">Accuracy: ±${Math.round(accuracy)}m</span>` : '');
+        statusEl.innerHTML = `<span class="status-pending">Alert sent — admin has been notified.</span>${noteHtml}`;
+        cancelBtn.classList.add('show');
+        startLiveLocationUpdates();
+      }catch(err){
+        statusEl.innerHTML = `<span class="status-error">Could not reach the server: ${err.message}. Please tell a teacher directly.</span>`;
+        sosBtn.disabled = false;
+        sent = false;
+        sosBtn.classList.remove('sent');
+      }
+    };
+
+    if(!('geolocation' in navigator)){
+      doSend(null, null, null, 'This browser does not support location sharing — only your name was sent.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (pos)=> doSend(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, null),
+      (err)=> doSend(null, null, null, geoErrorReason(err)),
+      { timeout: 8000, enableHighAccuracy: true }
+    );
+  }
+
+  // After the initial alert, keep refining location in the background so admin
+  // sees the student's live position, not just a single snapshot.
+  function startLiveLocationUpdates(){
+    if(!('geolocation' in navigator) || !myAlertId) return;
+    watchId = navigator.geolocation.watchPosition(
+      (pos)=>{
+        fetch(`${API}/api/sos/${myAlertId}/location`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy })
+        }).catch(()=>{});
+      },
+      ()=>{},
+      { enableHighAccuracy:true, maximumAge:5000 }
+    );
+  }
+  function stopLiveLocationUpdates(){
+    if(watchId != null && 'geolocation' in navigator){
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    }
+  }
+
+  cancelBtn.addEventListener('click', async ()=>{
+    if(!myAlertId) return;
+    try{ await fetch(`${API}/api/sos/${myAlertId}/cancel`, {method:'POST'}); }catch(e){}
+    stopLiveLocationUpdates();
+    resetUI();
+  });
+
+  function resetUI(){
+    sent = false;
+    myAlertId = null;
+    sosBtn.disabled = false;
+    sosBtn.classList.remove('sent');
+    ring.style.strokeDashoffset = RING_LEN;
+    holdHint.textContent = 'Hold for 2 seconds';
+    statusEl.innerHTML = '';
+    cancelBtn.classList.remove('show');
+  }
+
+  sosBtn.addEventListener('mousedown', startHold);
+  sosBtn.addEventListener('touchstart', (e)=>{e.preventDefault(); startHold();}, {passive:false});
+  ['mouseup','mouseleave','touchend','touchcancel'].forEach(ev=> sosBtn.addEventListener(ev, cancelHold));
+})();
+</script>
+</body>
+</html>

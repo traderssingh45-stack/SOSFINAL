@@ -1,0 +1,17 @@
+{
+  "name": "campus-sos-server",
+  "version": "1.0.0",
+  "description": "Backend for Campus SOS push alert system",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "firebase-admin": "^12.3.1",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5"
+  }
+}
