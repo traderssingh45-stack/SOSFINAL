@@ -87,16 +87,57 @@
     .alert-card{flex-direction:column;align-items:flex-start;}
     .timer-elapsed{text-align:left;}
   }
+
+  .login-screen{
+    min-height:calc(100vh - 49px);
+    display:flex;align-items:center;justify-content:center;
+    padding:20px;
+  }
+  .login-card{
+    background:#fff;border:1.5px solid var(--line);border-radius:14px;
+    padding:36px 32px;width:100%;max-width:340px;
+    text-align:center;
+    box-shadow:0 4px 24px rgba(20,33,61,0.08);
+  }
+  .login-icon{font-size:30px;margin-bottom:6px;}
+  .login-card h2{margin:0 0 4px;font-size:19px;font-weight:700;}
+  .login-sub{margin:0 0 22px;color:var(--slate);font-size:13px;}
+  .login-card input{
+    width:100%;border:1.5px solid var(--line);border-radius:8px;
+    padding:11px 14px;font-size:14px;margin-bottom:14px;color:var(--ink);
+  }
+  .login-card input:focus{outline:2px solid var(--ink);outline-offset:1px;}
+  .login-card button{
+    width:100%;border:none;border-radius:8px;background:var(--ink);color:var(--paper);
+    font-size:14px;font-weight:700;padding:11px 14px;cursor:pointer;transition:background .2s;
+  }
+  .login-card button:hover{background:#0c1730;}
+  .login-card button:disabled{opacity:0.6;cursor:not-allowed;}
+  .login-error{color:var(--alert);font-size:13px;font-weight:600;margin-top:12px;min-height:16px;}
 </style>
 </head>
 <body>
 
 <div class="role-bar"><span class="dot"></span> Campus SOS — Admin</div>
+
+<div id="login-screen" class="login-screen">
+  <form id="login-form" class="login-card">
+    <div class="login-icon">🔒</div>
+    <h2>Admin sign-in</h2>
+    <p class="login-sub">Riverside High · Front Office</p>
+    <input type="password" id="login-password" placeholder="Admin password" autocomplete="current-password" autofocus required>
+    <button type="submit" id="login-submit">Sign in</button>
+    <div class="login-error" id="login-error"></div>
+  </form>
+</div>
+
+<div id="dashboard" style="display:none;">
 <div class="admin-banner" id="setup-banner"></div>
 <div class="sos-flash-banner" id="sos-flash-banner">⚠ ACTIVE SOS ALERT — RESPOND NOW</div>
 
 <div class="admin-topbar">
   <div>
+
     <h2>Safety Dashboard</h2>
     <div class="sub">Riverside High · Front Office</div>
   </div>
@@ -123,12 +164,55 @@
     <div class="alert-grid" id="resolved-grid"></div>
   </div>
 </div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-messaging-compat.js"></script>
 <script>
 (function(){
   const API = '';
+  let sessionToken = null; // kept in memory only — re-login required each time the page loads
+
+  const loginScreen = document.getElementById('login-screen');
+  const dashboard = document.getElementById('dashboard');
+  const loginForm = document.getElementById('login-form');
+  const loginPassword = document.getElementById('login-password');
+  const loginSubmit = document.getElementById('login-submit');
+  const loginError = document.getElementById('login-error');
+
+  function authHeaders(){
+    return sessionToken ? { 'Authorization': 'Bearer ' + sessionToken } : {};
+  }
+
+  loginForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    loginError.textContent = '';
+    loginSubmit.disabled = true;
+    loginSubmit.textContent = 'Signing in…';
+    try{
+      const res = await fetch(`${API}/api/admin/login`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ password: loginPassword.value })
+      });
+      const data = await res.json();
+      if(!res.ok){
+        loginError.textContent = data.error || 'Sign-in failed. Try again.';
+        loginSubmit.disabled = false;
+        loginSubmit.textContent = 'Sign in';
+        return;
+      }
+      sessionToken = data.token;
+      loginScreen.style.display = 'none';
+      dashboard.style.display = 'block';
+      loginPassword.value = '';
+      loadAlerts();
+    }catch(err){
+      loginError.textContent = 'Could not reach the server. Check your connection.';
+      loginSubmit.disabled = false;
+      loginSubmit.textContent = 'Sign in';
+    }
+  });
 
   const firebaseConfig = {
     apiKey: "AIzaSyB50atVibwLBtGiz7trwS-Il4SePwKPjtk",
@@ -199,7 +283,7 @@
 
       await fetch(`${API}/api/admin/register`, {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: {'Content-Type':'application/json', ...authHeaders()},
         body: JSON.stringify({ token, label: navigator.userAgent.slice(0,60) })
       });
 
@@ -266,8 +350,17 @@
   }
 
   async function loadAlerts(){
+    if(!sessionToken) return; // not logged in yet — nothing to load
     try{
-      const res = await fetch(`${API}/api/alerts`);
+      const res = await fetch(`${API}/api/alerts`, { headers: authHeaders() });
+      if(res.status === 401){
+        // Session expired or invalid — bounce back to login.
+        sessionToken = null;
+        dashboard.style.display = 'none';
+        loginScreen.style.display = 'flex';
+        loginError.textContent = 'Your session expired. Please sign in again.';
+        return;
+      }
       if(!res.ok) throw new Error('status ' + res.status);
       alerts = await res.json();
       render();
@@ -360,7 +453,7 @@
     if(!btn) return;
     const id = btn.dataset.id;
     try{
-      await fetch(`${API}/api/sos/${id}/${btn.dataset.action}`, {method:'POST'});
+      await fetch(`${API}/api/sos/${id}/${btn.dataset.action}`, { method:'POST', headers: authHeaders() });
       loadAlerts();
     }catch(err){ console.error(err); }
   });
