@@ -70,6 +70,47 @@ const upsertToken = db.prepare(`
 const allTokens = db.prepare(`SELECT token FROM admin_tokens`);
 const deleteToken = db.prepare(`DELETE FROM admin_tokens WHERE token=?`);
 
+// ---------- Admin auth (simple shared-password session) ----------
+const crypto = require('crypto');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const sessions = new Map(); // sessionToken -> expiresAt
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+function createSession() {
+  const token = crypto.randomBytes(24).toString('hex');
+  sessions.set(token, Date.now() + SESSION_TTL_MS);
+  return token;
+}
+function isValidSession(token) {
+  if (!token) return false;
+  const expiresAt = sessions.get(token);
+  if (!expiresAt) return false;
+  if (Date.now() > expiresAt) {
+    sessions.delete(token);
+    return false;
+  }
+  return true;
+}
+function requireAuth(req, res, next) {
+  if (!ADMIN_PASSWORD) {
+    // No password configured on the server — block access rather than allow it silently.
+    return res.status(503).json({ error: 'Admin password is not configured on the server.' });
+  }
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!isValidSession(token)) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  next();
+}
+// Periodically clear expired sessions so the Map doesn't grow forever.
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, expiresAt] of sessions) {
+    if (now > expiresAt) sessions.delete(token);
+  }
+}, 60 * 60 * 1000);
+
 // ---------- App ----------
 const app = express();
 app.use(cors());
@@ -91,22 +132,39 @@ function rowToAlert(r) {
   };
 }
 
+// ---------- Admin login ----------
+app.post('/api/admin/login', (req, res) => {
+  if (!ADMIN_PASSWORD) {
+    return res.status(503).json({ error: 'Admin password is not configured on the server.' });
+  }
+  const { password } = req.body || {};
+  // Constant-time-ish comparison to avoid trivial timing attacks on a short password.
+  const provided = Buffer.from(String(password || ''));
+  const expected = Buffer.from(ADMIN_PASSWORD);
+  const match = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+  if (!match) {
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+  const token = createSession();
+  res.json({ ok: true, token, expiresInMs: SESSION_TTL_MS });
+});
+
 // Register an admin device's push token (called once the admin grants notification permission)
-app.post('/api/admin/register', (req, res) => {
+app.post('/api/admin/register', requireAuth, (req, res) => {
   const { token, label } = req.body || {};
   if (!token) return res.status(400).json({ error: 'token is required' });
   upsertToken.run({ token, label: label || 'admin device', ts: Date.now() });
   res.json({ ok: true });
 });
 
-app.post('/api/admin/unregister', (req, res) => {
+app.post('/api/admin/unregister', requireAuth, (req, res) => {
   const { token } = req.body || {};
   if (token) deleteToken.run(token);
   res.json({ ok: true });
 });
 
-// List alerts (admin dashboard polls or loads this on open)
-app.get('/api/alerts', (req, res) => {
+// List alerts (admin dashboard polls or loads this on open) — requires login
+app.get('/api/alerts', requireAuth, (req, res) => {
   res.json(listAlerts.all().map(rowToAlert));
 });
 
@@ -149,7 +207,7 @@ app.post('/api/sos/:id/location', (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/sos/:id/ack', async (req, res) => {
+app.post('/api/sos/:id/ack', requireAuth, async (req, res) => {
   const { id } = req.params;
   const existing = getAlert.get(id);
   if (!existing) return res.status(404).json({ error: 'alert not found' });
@@ -157,7 +215,7 @@ app.post('/api/sos/:id/ack', async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/sos/:id/resolve', async (req, res) => {
+app.post('/api/sos/:id/resolve', requireAuth, async (req, res) => {
   const { id } = req.params;
   const existing = getAlert.get(id);
   if (!existing) return res.status(404).json({ error: 'alert not found' });
